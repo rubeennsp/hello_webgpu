@@ -124,28 +124,36 @@ async function main() {
   const vertexBufferSize = vertexBufferData.byteLength;
   device.queue.writeBuffer(vertexBuffer, 0, vertexBufferData);
 
-  // Prepare render target
-  const canvasTexture = context.getCurrentTexture()
-  const canvasTextureView = canvasTexture.createView()
+  function render() {
+    // Prepare render target
+    const canvasTexture = context.getCurrentTexture()
+    const canvasTextureView = canvasTexture.createView()
 
-  // Record commands and submit
-  const commandEncoder = device.createCommandEncoder()
-  const passEncoder = commandEncoder.beginRenderPass({
-    colorAttachments: [
-      {
-        loadOp: "clear",
-        storeOp: "store",
-        view: canvasTextureView,
-        clearValue: [0, 0, 0, 1],
-      }
-    ]
-  })
-  passEncoder.setPipeline(pipeline)
-  passEncoder.setVertexBuffer(0, vertexBuffer, 0, vertexBufferSize);
-  passEncoder.draw(3);
-  passEncoder.end()
-  const commandBuffer = commandEncoder.finish()
-  device.queue.submit([commandBuffer])
+    // Record commands and submit
+    const commandEncoder = device.createCommandEncoder()
+    const passEncoder = commandEncoder.beginRenderPass({
+      colorAttachments: [
+        {
+          loadOp: "clear",
+          storeOp: "store",
+          view: canvasTextureView,
+          clearValue: [0, 0, 0, 1],
+        }
+      ]
+    })
+    passEncoder.setPipeline(pipeline)
+    passEncoder.setVertexBuffer(0, vertexBuffer, 0, vertexBufferSize);
+    passEncoder.draw(3);
+    passEncoder.end()
+    const commandBuffer = commandEncoder.finish()
+    device.queue.submit([commandBuffer])
+  }
+
+  function animationLoop() {
+    render()
+    requestAnimationFrame(animationLoop)
+  }
+  animationLoop();
 
 }
 

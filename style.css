@@ -1,0 +1,16 @@
+#gpu-canvas {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100%;
+    width: 100%;
+    z-index: -1;
+};
+
+#content {
+    position: relative;
+    z-index: 1;
+    color: white;
+    padding: 100px;
+    text-align: center;
+}

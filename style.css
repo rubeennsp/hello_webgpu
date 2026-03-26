@@ -5,12 +5,17 @@
     height: 100%;
     width: 100%;
     z-index: -1;
-};
+}
 
 #content {
     position: relative;
+    font-family: Google Sans,Google Sans Text,Roboto,Arial,Noto Sans JP,Noto Sans KR,sans-serif;
     z-index: 1;
-    color: white;
-    padding: 100px;
+    color: #e0e0a0;
+    padding: 30px;
     text-align: center;
+}
+
+h1 {
+    font-size: 500%;
 }

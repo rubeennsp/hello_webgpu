@@ -1,4 +1,5 @@
-async function init() {
+/** @param {HTMLCanvasElement} canvas  */
+async function initWebGPU(canvas) {
   if (!navigator.gpu) {
     throw Error("WebGPU not supported.");
   }
@@ -13,7 +14,6 @@ async function init() {
   }
   const device = await adapter.requestDevice();
 
-  const canvas = document.querySelector("#gpu-canvas");
   /** @type {GPUCanvasContext} */
   const canvasContext = canvas.getContext("webgpu")
   canvasContext.configure({
@@ -22,12 +22,10 @@ async function init() {
     alphaMode: "premultiplied",
   });
 
-  const context = {
+  return {
     device: device,
-    canvas: canvas,
-    canvasContext: canvasContext,
+    context: canvasContext,
   };
-  return context;
 }
 
 const shaders = /*wgsl*/ `
@@ -51,11 +49,23 @@ const shaders = /*wgsl*/ `
   }
 `;
 
+/** @param {HTMLCanvasElement} canvas */
+function resizeGPUCanvas(canvas) {
+  canvas.width = document.documentElement.clientWidth
+  canvas.height = document.documentElement.clientHeight
+}
+
 async function main() {
-  const context = await init();
-  console.log(context);
-  const device = context.device
-  const canvasTexture = context.canvasContext.getCurrentTexture()
+  /** @type {HTMLCanvasElement} */
+  const canvas = document.querySelector("#gpu-canvas")
+  console.log(canvas)
+
+  window.addEventListener("resize", () => resizeGPUCanvas(canvas))
+  resizeGPUCanvas(canvas)
+
+  // Init webgpu
+  const { device, context } = await initWebGPU(canvas);
+  console.log(device, context);
 
   // Create shader module
   const shaderModule = device.createShaderModule({ code: shaders });
@@ -114,6 +124,10 @@ async function main() {
   const vertexBufferSize = vertexBufferData.byteLength;
   device.queue.writeBuffer(vertexBuffer, 0, vertexBufferData);
 
+  // Prepare render target
+  const canvasTexture = context.getCurrentTexture()
+  const canvasTextureView = canvasTexture.createView()
+
   // Record commands and submit
   const commandEncoder = device.createCommandEncoder()
   const passEncoder = commandEncoder.beginRenderPass({
@@ -121,7 +135,7 @@ async function main() {
       {
         loadOp: "clear",
         storeOp: "store",
-        view: canvasTexture.createView(),
+        view: canvasTextureView,
         clearValue: [0, 0, 0, 1],
       }
     ]

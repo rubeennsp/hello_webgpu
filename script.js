@@ -34,11 +34,26 @@ const shaders = /*wgsl*/ `
     @location(0) color : vec3f,
   };
 
+  struct Uniforms {
+    resolution : vec2f,
+    time : f32,
+  }
+
+  @group(0) @binding(0) var<uniform> uniforms : Uniforms;
+
+  fn rot2d(time : f32) -> mat2x2<f32> {
+    return mat2x2<f32>(cos(time), sin(time), -sin(time), cos(time));
+  }
+
   @vertex
   fn vertex_main(@location(0) position : vec3f,
                  @location(1) color : vec3f) -> VertexOut {
     var output : VertexOut;
-    output.position = vec4f(position, 1);
+    let reso : vec2f = uniforms.resolution;
+    let minres : f32 = min(reso.x, reso.y);
+    let worldpos = rot2d(uniforms.time) * position.xy;
+    let screenpos = worldpos * minres / reso;
+    output.position = vec4f(screenpos, 0, 1);
     output.color = color;
     return output;
   }
@@ -112,10 +127,10 @@ async function main() {
     usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
   })
   const vertexBufferData = new Float32Array([
-    -0.5, -0.5, 0, 1,
+    -0.43301, -0.25, 0, 1,
     1, 0, 0, 0,
 
-    0.5, -0.5, 0, 1,
+    0.43301, -0.25, 0, 1,
     0, 1, 0, 0,
 
     0, 0.5, 0, 1,
@@ -124,10 +139,37 @@ async function main() {
   const vertexBufferSize = vertexBufferData.byteLength;
   device.queue.writeBuffer(vertexBuffer, 0, vertexBufferData);
 
+  const timeStart = performance.now() / 1000.
+  let time = 0;
+
+  function update() {
+    const now = performance.now() / 1000. // time in seconds
+    time = now - timeStart;
+  }
+
+  // Create uniform buffer
+  const uniformBuffer = device.createBuffer({
+    size: 16,
+    usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+  })
+
+  const uniformBindGroupLayout = pipeline.getBindGroupLayout(0)
+
+  const uniformBindGroup = device.createBindGroup({
+    entries: [{ binding: 0, resource: uniformBuffer }],
+    layout: uniformBindGroupLayout,
+  })
+
   function render() {
     // Prepare render target
     const canvasTexture = context.getCurrentTexture()
     const canvasTextureView = canvasTexture.createView()
+
+    device.queue.writeBuffer(uniformBuffer, 0, new Float32Array([
+      canvas.width,
+      canvas.height,
+      time,
+    ]))
 
     // Record commands and submit
     const commandEncoder = device.createCommandEncoder()
@@ -143,6 +185,7 @@ async function main() {
     })
     passEncoder.setPipeline(pipeline)
     passEncoder.setVertexBuffer(0, vertexBuffer, 0, vertexBufferSize);
+    passEncoder.setBindGroup(0, uniformBindGroup)
     passEncoder.draw(3);
     passEncoder.end()
     const commandBuffer = commandEncoder.finish()
@@ -150,6 +193,7 @@ async function main() {
   }
 
   function animationLoop() {
+    update()
     render()
     requestAnimationFrame(animationLoop)
   }

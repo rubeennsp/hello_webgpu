@@ -71,12 +71,23 @@ function resizeGPUCanvas(canvas) {
 }
 
 async function main() {
+  // Get DOM elements
   /** @type {HTMLCanvasElement} */
   const canvas = document.querySelector("#gpu-canvas")
   console.log(canvas)
 
   window.addEventListener("resize", () => resizeGPUCanvas(canvas))
   resizeGPUCanvas(canvas)
+
+  const perfData = {
+    renderTimes: []
+  }
+  const perfElements = {
+    /** @type {HTMLParagraphElement} */
+    renderTimeAvg: document.querySelector("#render-time-avg"),
+    renderTimeMax: document.querySelector("#render-time-max"),
+    renderTimeMin: document.querySelector("#render-time-min"),
+  }
 
   // Init webgpu
   const { device, context } = await initWebGPU(canvas);
@@ -192,9 +203,33 @@ async function main() {
     device.queue.submit([commandBuffer])
   }
 
-  function animationLoop() {
+  // TODO: Make the flow of data clearer between update and render.
+  async function animationLoop() {
+    // Update world state
+    const renderStartTime = performance.now()
     update()
+
+    // Perform rendering work
     render()
+    await device.queue.onSubmittedWorkDone() // Wait for 
+    const renderEndTime = performance.now()
+    const renderTime = renderEndTime - renderStartTime
+
+    // Update performance measurement data
+    perfData.renderTimes.push(renderTime)
+    if (perfData.renderTimes.length > 100) {
+      perfData.renderTimes.shift()
+    }
+
+    // Update performance measurement display
+    const avgRenderTime = perfData.renderTimes.reduce((a, b) => a + b, 0) / perfData.renderTimes.length
+    const minRenderTime = Math.min(...perfData.renderTimes)
+    const maxRenderTime = Math.max(...perfData.renderTimes)
+    perfElements.renderTimeAvg.textContent = `Frame render time (last 100 avg): ${(avgRenderTime).toFixed(3)} ms`
+    perfElements.renderTimeMax.textContent = `Frame render time (last 100 max): ${(maxRenderTime).toFixed(3)} ms`
+    perfElements.renderTimeMin.textContent = `Frame render time (last 100 min): ${(minRenderTime).toFixed(3)} ms`
+
+    // Next frame
     requestAnimationFrame(animationLoop)
   }
   animationLoop();

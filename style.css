@@ -16,6 +16,23 @@
     text-align: center;
 }
 
+#performance-overlay {
+    background-color: #201040;
+    color: #e0e0e0;
+    z-index: 10;
+    bottom: 5vmin;
+    right: 5vmin;
+    padding: 0.6em;
+    position: fixed;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: clamp(1vmin, 1rem, 3vmin);
+    border-radius: 1em;
+}
+
+#performance-overlay p {
+    margin: 0.3em;
+}
+
 h1 {
     font-size: 500%;
 }

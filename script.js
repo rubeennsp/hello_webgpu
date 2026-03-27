@@ -324,7 +324,11 @@ async function main() {
 
     const boxUniformBufferData = new Float32Array(4*4*3)
     const boxMVP = [
-      mat4.rotationY(time),
+      [
+        mat4.scaling([2, 2, 2]),
+        mat4.rotationY(time),
+        mat4.translation([-0.5, -0.5, -0.5]),
+      ].reduce((a, b) => mat4.multiply(a, b)),
       mat4.lookAt(
         [3, 3, 3],  // position
         [0, 0, 0],     // target
@@ -359,7 +363,7 @@ async function main() {
     passEncoder.setPipeline(trianglePipeline)
     passEncoder.setVertexBuffer(0, triangleVertexBuffer, 0, triangleVertexBuffer.size);
     passEncoder.setBindGroup(0, uniformBindGroup)
-    passEncoder.draw(3);
+    // passEncoder.draw(3);
 
     // draw box
     passEncoder.setPipeline(boxPipeline)

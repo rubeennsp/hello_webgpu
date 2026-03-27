@@ -1,3 +1,5 @@
+import { mat4 } from 'https://wgpu-matrix.org/dist/3.x/wgpu-matrix.module.js';
+
 /** @param {HTMLCanvasElement} canvas  */
 async function initWebGPU(canvas) {
   if (!navigator.gpu) {
@@ -28,7 +30,7 @@ async function initWebGPU(canvas) {
   };
 }
 
-const shaders = /*wgsl*/ `
+const triangleShaders = /*wgsl*/ `
   struct VertexOut {
     @builtin(position) position : vec4f,
     @location(0) color : vec3f,
@@ -51,9 +53,9 @@ const shaders = /*wgsl*/ `
     var output : VertexOut;
     let reso : vec2f = uniforms.resolution;
     let minres : f32 = min(reso.x, reso.y);
-    let worldpos = rot2d(uniforms.time) * position.xy;
+    let worldpos = rot2d(uniforms.time) * position.xy  + vec2f(0, -.8);
     let screenpos = worldpos * minres / reso;
-    output.position = vec4f(screenpos, 0, 1);
+    output.position = vec4f(screenpos, 0.99, 1);
     output.color = color;
     return output;
   }
@@ -64,10 +66,16 @@ const shaders = /*wgsl*/ `
   }
 `;
 
+let depthTexture
 /** @param {HTMLCanvasElement} canvas */
-function resizeGPUCanvas(canvas) {
+function resizeGPUCanvas(canvas, device) {
   canvas.width = document.documentElement.clientWidth
   canvas.height = document.documentElement.clientHeight
+  depthTexture = device.createTexture({
+    size: [canvas.width, canvas.height],
+    format: "depth24plus",
+    usage: GPUTextureUsage.RENDER_ATTACHMENT,
+  })
 }
 
 async function main() {
@@ -75,9 +83,6 @@ async function main() {
   /** @type {HTMLCanvasElement} */
   const canvas = document.querySelector("#gpu-canvas")
   console.log(canvas)
-
-  window.addEventListener("resize", () => resizeGPUCanvas(canvas))
-  resizeGPUCanvas(canvas)
 
   const perfData = {
     renderTimes: []
@@ -93,8 +98,11 @@ async function main() {
   const { device, context } = await initWebGPU(canvas);
   console.log(device, context);
 
+  window.addEventListener("resize", () => resizeGPUCanvas(canvas, device))
+  resizeGPUCanvas(canvas, device)
+
   // Create shader module
-  const shaderModule = device.createShaderModule({ code: shaders });
+  const triangleShaderModule = device.createShaderModule({ code: triangleShaders });
 
   // Create vertex buffer layout
   /** @type {GPUVertexBufferLayout} */
@@ -116,28 +124,30 @@ async function main() {
   }
 
   // Create render pipeline
-  const pipeline = device.createRenderPipeline({
+  const trianglePipeline = device.createRenderPipeline({
     vertex: {
-      module: shaderModule,
+      module: triangleShaderModule,
       entryPoint: "vertex_main",
       buffers: [vertexBufferLayouts],
     },
     fragment: {
-      module: shaderModule,
+      module: triangleShaderModule,
       entryPoint: "fragment_main",
       targets: [
         { format: navigator.gpu.getPreferredCanvasFormat() },
       ],
     },
     layout: "auto",
+    
+    depthStencil: {
+      depthWriteEnabled: true,
+      depthCompare: "less",
+      format: "depth24plus",
+    }
   });
 
   // Create vertex buffer
-  const vertexBuffer = device.createBuffer({
-    size: 1000,
-    usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
-  })
-  const vertexBufferData = new Float32Array([
+  const triangleVertexBufferData = new Float32Array([
     -0.43301, -0.25, 0, 1,
     1, 0, 0, 0,
 
@@ -147,8 +157,126 @@ async function main() {
     0, 0.5, 0, 1,
     0, 0, 1, 0,
   ])
-  const vertexBufferSize = vertexBufferData.byteLength;
-  device.queue.writeBuffer(vertexBuffer, 0, vertexBufferData);
+  const triangleVertexBuffer = device.createBuffer({
+    size: triangleVertexBufferData.byteLength,
+    usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+  })
+  device.queue.writeBuffer(triangleVertexBuffer, 0, triangleVertexBufferData);
+  
+  
+  // counter-clockwise triangle list with vertices and normals
+  // assuming x-right, y-up, and z-out (right-handed coords)
+  const boxVertexBufferData = new Float32Array([
+    // z = 0
+    0, 0, 0, 1,     0, 0, -1, 0,
+    0, 1, 0, 1,     0, 0, -1, 0,
+    1, 0, 0, 1,     0, 0, -1, 0,
+    1, 0, 0, 1,     0, 0, -1, 0,
+    0, 1, 0, 1,     0, 0, -1, 0,
+    1, 1, 0, 1,     0, 0, -1, 0,
+    // z = 1
+    0, 0, 1, 1,     0, 0, 1, 0,
+    1, 0, 1, 1,     0, 0, 1, 0,
+    0, 1, 1, 1,     0, 0, 1, 0,
+    0, 1, 1, 1,     0, 0, 1, 0,
+    1, 0, 1, 1,     0, 0, 1, 0,
+    1, 1, 1, 1,     0, 0, 1, 0,
+    // y = 0
+    0, 0, 0, 1,     0, -1, 0, 0,
+    1, 0, 0, 1,     0, -1, 0, 0,
+    0, 0, 1, 1,     0, -1, 0, 0,
+    0, 0, 1, 1,     0, -1, 0, 0,
+    1, 0, 0, 1,     0, -1, 0, 0,
+    1, 0, 1, 1,     0, -1, 0, 0,
+    // y = 1
+    0, 1, 0, 1,     0, 1, 0, 0,
+    0, 1, 1, 1,     0, 1, 0, 0,
+    1, 1, 0, 1,     0, 1, 0, 0,
+    1, 1, 0, 1,     0, 1, 0, 0,
+    0, 1, 1, 1,     0, 1, 0, 0,
+    1, 1, 1, 1,     0, 1, 0, 0,
+    // x = 0
+    0, 0, 0, 1,     -1, 0, 0, 0,
+    0, 0, 1, 1,     -1, 0, 0, 0,
+    0, 1, 0, 1,     -1, 0, 0, 0,
+    0, 1, 0, 1,     -1, 0, 0, 0,
+    0, 0, 1, 1,     -1, 0, 0, 0,
+    0, 1, 1, 1,     -1, 0, 0, 0,
+    // x = 1
+    1, 0, 0, 1,     1, 0, 0, 0,
+    1, 1, 0, 1,     1, 0, 0, 0,
+    1, 0, 1, 1,     1, 0, 0, 0,
+    1, 0, 1, 1,     1, 0, 0, 0,
+    1, 1, 0, 1,     1, 0, 0, 0,
+    1, 1, 1, 1,     1, 0, 0, 0,
+  ])
+  const boxVertexBuffer = device.createBuffer({
+    size: boxVertexBufferData.byteLength,
+    usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+  })
+  device.queue.writeBuffer(boxVertexBuffer, 0, boxVertexBufferData);
+  const boxShaderModule = device.createShaderModule({
+    code: /* wgsl */`
+      struct VertexOut {
+        @builtin(position) ndcPos : vec4f,
+        @location(0) worldPos : vec3f,
+        @location(1) worldNormal : vec3f,
+        @location(2) objPos : vec3f,
+      }
+
+      struct Uniforms {
+        M : mat4x4<f32>, // object to world
+        V : mat4x4<f32>, // world to view
+        P : mat4x4<f32>, // view to NDC
+      }
+      @group(0) @binding(0) var<uniform> u : Uniforms;
+
+      @vertex
+      fn vertex_main(
+        @location(0) position : vec4f,
+        @location(1) normal : vec3f,
+      ) -> VertexOut {
+        let worldPos = u.M * position;
+        let worldNormal = u.M * vec4f(normal, 0);
+        var ndcPos = u.P * u.V * worldPos;
+        ndcPos /= ndcPos.w;
+        return VertexOut(
+          ndcPos,
+          worldPos.xyz, // w should be 1
+          worldNormal.xyz, // w should be 0
+          position.xyz // w should be 0
+        );
+      }
+
+      @fragment
+      fn fragment_main(
+        @builtin(position) ndcPos : vec4f,
+        @location(0) worldPos : vec3f,
+        @location(1) worldNormal : vec3f,
+        @location(2) objPos : vec3f,
+      ) -> @location(0) vec4f {
+        return vec4f(objPos, 1);
+      }
+    `,
+  })
+  const boxPipeline = device.createRenderPipeline({
+    layout: "auto",
+    vertex: {
+      module: boxShaderModule,
+      entryPoint: "vertex_main",
+      buffers: [vertexBufferLayouts],
+    },
+    fragment: {
+      module: boxShaderModule,
+      entryPoint: "fragment_main",
+      targets: [{ format: navigator.gpu.getPreferredCanvasFormat() }],
+    },
+    depthStencil: {
+      depthWriteEnabled: true,
+      depthCompare: "less",
+      format: "depth24plus",
+    }
+  })
 
   const timeStart = performance.now() / 1000.
   let time = 0;
@@ -162,14 +290,26 @@ async function main() {
   const uniformBuffer = device.createBuffer({
     size: 16,
     usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+    label: "triangle-uniform-buffer"
   })
 
-  const uniformBindGroupLayout = pipeline.getBindGroupLayout(0)
-
+  const uniformBindGroupLayout = trianglePipeline.getBindGroupLayout(0)
   const uniformBindGroup = device.createBindGroup({
     entries: [{ binding: 0, resource: uniformBuffer }],
     layout: uniformBindGroupLayout,
   })
+
+  const boxUniformBuffer = device.createBuffer({
+    size: 16 * 4 * 3,
+    usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+    label: "box-uniform-buffer"
+  })
+  const boxUniformBindGroup = device.createBindGroup({
+    entries: [{ binding: 0, resource: boxUniformBuffer }],
+    layout: boxPipeline.getBindGroupLayout(0)
+  })
+
+    console.log(mat4)
 
   function render() {
     // Prepare render target
@@ -182,6 +322,21 @@ async function main() {
       time,
     ]))
 
+    const boxUniformBufferData = new Float32Array(4*4*3)
+    const boxMVP = [
+      mat4.rotationY(time),
+      mat4.lookAt(
+        [3, 3, 3],  // position
+        [0, 0, 0],     // target
+        [0, 1, 0],     // up
+      ),
+      mat4.perspective(3.1415 / 3, canvas.width / canvas.height, 0.5, 100),
+    ]
+    boxMVP.forEach((m, i) => {
+      boxUniformBufferData.set(m, i * m.length)
+    })
+    device.queue.writeBuffer(boxUniformBuffer, 0, boxUniformBufferData)
+
     // Record commands and submit
     const commandEncoder = device.createCommandEncoder()
     const passEncoder = commandEncoder.beginRenderPass({
@@ -192,12 +347,26 @@ async function main() {
           view: canvasTextureView,
           clearValue: [0, 0, 0, 1],
         }
-      ]
+      ],
+      depthStencilAttachment: {
+        view: depthTexture.createView(),
+        depthClearValue: 1.0,
+        depthLoadOp: "clear",
+        depthStoreOp: "discard",
+      },
     })
-    passEncoder.setPipeline(pipeline)
-    passEncoder.setVertexBuffer(0, vertexBuffer, 0, vertexBufferSize);
+    // draw triangle
+    passEncoder.setPipeline(trianglePipeline)
+    passEncoder.setVertexBuffer(0, triangleVertexBuffer, 0, triangleVertexBuffer.size);
     passEncoder.setBindGroup(0, uniformBindGroup)
     passEncoder.draw(3);
+
+    // draw box
+    passEncoder.setPipeline(boxPipeline)
+    passEncoder.setVertexBuffer(0, boxVertexBuffer, 0, boxVertexBuffer.size)
+    passEncoder.setBindGroup(0, boxUniformBindGroup)
+    passEncoder.draw(36)
+
     passEncoder.end()
     const commandBuffer = commandEncoder.finish()
     device.queue.submit([commandBuffer])

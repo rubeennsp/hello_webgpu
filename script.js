@@ -70,11 +70,47 @@ function resizeGPUCanvas(canvas) {
   canvas.height = document.documentElement.clientHeight
 }
 
+/**
+ * @param {HTMLCanvasElement} canvas
+ * @param {string} text
+ * @param {number} time
+ * @param {number} speed
+*/
+function renderText(canvas, text, time, speed) {
+  canvas.width = 200;
+  canvas.height = 50;
+
+  const padding = 10
+
+
+  /** @type {CanvasRenderingContext2D} */
+  const context = canvas.getContext("2d")
+  const fontSize = canvas.height - 2 * padding
+  context.font = `${fontSize}px sans-serif`
+  context.fillStyle = "transparent"
+  context.fillRect(0, 0, canvas.width, canvas.height)
+  context.fillStyle = "white"
+  context.textBaseline = "hanging"
+  const textMetrics = context.measureText(text)
+  const textWidth = textMetrics.actualBoundingBoxRight + textMetrics.actualBoundingBoxLeft
+  const loopPadding = canvas.height
+  const loopWidth = textWidth + canvas.width + loopPadding
+  let offset = time * speed
+  offset = offset - loopWidth * Math.floor(offset / loopWidth)
+  context.fillText(text, canvas.width - offset, padding)
+
+  context.getImageData(0, 0, canvas.width, canvas.height)
+}
+
 async function main() {
   // Get DOM elements
   /** @type {HTMLCanvasElement} */
   const canvas = document.querySelector("#gpu-canvas")
   console.log(canvas)
+
+  /** @type {HTMLCanvasElement} */
+  const textCanvas = document.querySelector("#text-canvas")
+  console.log(textCanvas)
 
   window.addEventListener("resize", () => resizeGPUCanvas(canvas))
   resizeGPUCanvas(canvas)
@@ -211,6 +247,8 @@ async function main() {
 
     // Perform rendering work
     render()
+    renderText(textCanvas, "Lorem Ipsum Hello QqPpYyJjGgF 😊", time, textCanvas.width * 0.5)
+
     await device.queue.onSubmittedWorkDone() // Wait for 
     const renderEndTime = performance.now()
     const renderTime = renderEndTime - renderStartTime

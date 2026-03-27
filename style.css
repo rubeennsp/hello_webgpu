@@ -7,6 +7,10 @@
     z-index: -1;
 }
 
+#text-canvas {
+    border: 1px solid grey;
+}
+
 #content {
     position: relative;
     font-family: Google Sans,Google Sans Text,Roboto,Arial,Noto Sans JP,Noto Sans KR,sans-serif;

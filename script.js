@@ -228,6 +228,8 @@ async function main() {
         M : mat4x4<f32>, // object to world
         V : mat4x4<f32>, // world to view
         P : mat4x4<f32>, // view to NDC
+        V_inv : mat4x4<f32>, // view to world
+        time : f32,
       }
       @group(0) @binding(0) var<uniform> u : Uniforms;
 
@@ -239,13 +241,27 @@ async function main() {
         let worldPos = u.M * position;
         let worldNormal = u.M * vec4f(normal, 0);
         var ndcPos = u.P * u.V * worldPos;
-        ndcPos /= ndcPos.w;
+        // ndcPos /= ndcPos.w; // Don't perform perspective divide, hardware needs the w!
         return VertexOut(
           ndcPos,
           worldPos.xyz, // w should be 1
           worldNormal.xyz, // w should be 0
           position.xyz // w should be 0
         );
+      }
+
+      fn max3(v: vec3f) -> f32 { return max(v.x, max(v.y, v.z)); }
+
+      fn sdBox(pos: vec3f, size: vec3f) -> f32 {
+        let allAxes = abs(pos) - size;
+        let positives = max(allAxes, vec3f(0, 0, 0));
+        let negatives = min(allAxes, vec3f(0, 0, 0));
+        return length(positives) + max3(negatives);
+      }
+
+      fn sdScene(pos: vec3f) -> f32 {
+        let boxCenter = vec3f(sin(u.time), 0, 0);
+        return sdBox(pos - boxCenter, vec3f(0.5, 0.5, 0.5));
       }
 
       @fragment
@@ -255,7 +271,35 @@ async function main() {
         @location(1) worldNormal : vec3f,
         @location(2) objPos : vec3f,
       ) -> @location(0) vec4f {
-        return vec4f(objPos, 1);
+        var eye = vec3f(0, 0, 0); // view-space eye coords
+        eye = (u.V_inv * vec4f(eye, 1)).xyz; // world-space eye coords
+        var color = vec3f(0.8, 0.8, 1);
+
+        // Loop constants
+        let raydir : vec3f = normalize(worldPos - eye);
+        const numIter : u32 = 100;
+        const eps : f32 = 0.01;
+
+        // Loop variables
+        // var t: f32 = distance(eye, worldPos);
+        var t: f32 = 0;
+        var hit: bool = false;
+
+        for (var i: u32 = 0; i < numIter; i++) {
+          let pos = eye + raydir * t;
+          let dist = sdScene(pos);
+          if (abs(dist) < eps) {
+            hit = true;
+            break;
+          }
+          t += dist;
+        }
+
+        if (hit) {
+          color = abs(raydir);
+        }
+
+        return vec4f(color, 1);
       }
     `,
   })
@@ -300,16 +344,20 @@ async function main() {
   })
 
   const boxUniformBuffer = device.createBuffer({
-    size: 16 * 4 * 3,
+    size: 16 * 4 * 4 + 16,
     usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     label: "box-uniform-buffer"
   })
+  // float offsets, not byte offsets
+  const boxUniformBufferFloatOffsets = {
+    time: 16 * 4,
+  }
   const boxUniformBindGroup = device.createBindGroup({
     entries: [{ binding: 0, resource: boxUniformBuffer }],
     layout: boxPipeline.getBindGroupLayout(0)
   })
 
-    console.log(mat4)
+  console.log(mat4)
 
   function render() {
     // Prepare render target
@@ -322,23 +370,27 @@ async function main() {
       time,
     ]))
 
-    const boxUniformBufferData = new Float32Array(4*4*3)
+    const boxUniformBufferData = new Float32Array(16*4 + 4)
+    const worldToView = mat4.lookAt(
+      [3, 3, 3],     // position
+      [0, 0, 0],     // target
+      [0, 1, 0],     // up
+    )
+    const viewToWorld = mat4.inverse(worldToView)
     const boxMVP = [
       [
         mat4.scaling([2, 2, 2]),
         mat4.rotationY(time),
         mat4.translation([-0.5, -0.5, -0.5]),
       ].reduce((a, b) => mat4.multiply(a, b)),
-      mat4.lookAt(
-        [3, 3, 3],  // position
-        [0, 0, 0],     // target
-        [0, 1, 0],     // up
-      ),
+      worldToView,
       mat4.perspective(3.1415 / 3, canvas.width / canvas.height, 0.5, 100),
+      viewToWorld
     ]
     boxMVP.forEach((m, i) => {
       boxUniformBufferData.set(m, i * m.length)
     })
+    boxUniformBufferData.set([time], boxUniformBufferFloatOffsets.time)
     device.queue.writeBuffer(boxUniformBuffer, 0, boxUniformBufferData)
 
     // Record commands and submit

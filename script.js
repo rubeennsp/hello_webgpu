@@ -93,8 +93,16 @@ async function main() {
   const { device, context } = await initWebGPU(canvas);
   console.log(device, context);
 
-  // Create shader module
+  // Create shader modules
   const shaderModule = device.createShaderModule({ code: shaders });
+  const jumpFloodShaderModule = device.createShaderModule({
+    code: /* wgsl */ `
+      @compute
+      fn compute_main() {
+        
+      }
+    `,
+  })
 
   // Create vertex buffer layout
   /** @type {GPUVertexBufferLayout} */
@@ -130,7 +138,17 @@ async function main() {
       ],
     },
     layout: "auto",
+    label: "render"
   });
+
+  const jumpFloodPipeline = device.createComputePipeline({
+    compute: {
+      module: jumpFloodShaderModule,
+      entryPoint: "computeMain"
+    },
+    layout: "auto",
+    label: "jump-flood"
+  })
 
   // Create vertex buffer
   const vertexBuffer = device.createBuffer({

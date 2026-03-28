@@ -34,7 +34,9 @@
 }
 
 h1 {
-    font-size: 500%;
+    font-size: clamp(0rem, 5rem, 10vmin);
+    padding: 0.5rem;
+    margin: 0.5rem;
 }
 
 #file-input::file-selector-button {
@@ -42,11 +44,8 @@ h1 {
   color: maroon;             /* White text */
   z-index: 10;
   cursor: pointer;
-  bottom: 5vmin;
-  left: 5vmin;
   padding: 0.6em;
-  position: fixed;
   /* font-family: 'Courier New', Courier, monospace; */
-  font-size: clamp(1vmin, 2rem, 3vmin);
+  font-size: clamp(1vmin, 1.5rem, 3vmin);
   border-radius: 1em;
 }

@@ -305,6 +305,32 @@ async function main() {
 
       fn max3(v: vec3f) -> f32 { return max(v.x, max(v.y, v.z)); }
 
+      fn random2(v: vec2f) -> f32 {
+        var x = dot(v, vec2f(0.9382, 0.82372));
+        x = fract(x);
+        x *= 20.234;
+        x = sin(x);
+        x *= 5035.34324;
+        x = fract(x);
+        x = sin(x);
+        x *= 1102.34324;
+        x = fract(x);
+        return x;
+      }
+
+      fn random(v: vec3f) -> f32 {
+        var x = dot(v, vec3f(0.9382, 0.82372, 0.8973783));
+        x = fract(x);
+        x *= 20.234;
+        x = sin(x);
+        x *= 5035.34324;
+        x = fract(x);
+        x = sin(x);
+        x *= 1102.34324;
+        x = fract(x);
+        return x;
+      }
+
       fn sdBox(pos: vec3f, size: vec3f) -> f32 {
         let allAxes = abs(pos) - size;
         let positives = max(allAxes, vec3f(0, 0, 0));
@@ -319,40 +345,41 @@ async function main() {
 
       @fragment
       fn fragment_main(
-        @builtin(position) ndcPos : vec4f,
+        @builtin(position) fragCoord : vec4f,
         @location(0) worldPos : vec3f,
         @location(1) worldNormal : vec3f,
         @location(2) objPos : vec3f,
       ) -> @location(0) vec4f {
         var eye = vec3f(0, 0, 0); // view-space eye coords
         eye = (u.V_inv * vec4f(eye, 1)).xyz; // world-space eye coords
-        var color = vec3f(0.8, 0.8, 1);
+        var color = vec4f(0, 0, 0, 0);
+        var bgColor = vec3f(0.8, 0.8, 1);
 
         // Loop constants
         let raydir : vec3f = normalize(worldPos - eye);
         const numIter : u32 = 100;
-        const eps : f32 = 0.01;
+        const eps : f32 = 0.001;
 
         // Loop variables
-        // var t: f32 = distance(eye, worldPos);
-        var t: f32 = 0;
+        var t: f32 = distance(eye, worldPos) - random(fragCoord.xyz) * 0.1;
         var hit: bool = false;
+        var step: f32 = 0.05;
 
         for (var i: u32 = 0; i < numIter; i++) {
           let pos = eye + raydir * t;
           let dist = sdScene(pos);
-          if (abs(dist) < eps) {
+          if (dist < 0) {
             hit = true;
-            break;
+            let density: f32 = .1;
+            let contrib: f32 = (1 - color.a) * density;
+            color = vec4f(color.rgb + contrib * vec3f(1, 1, 1), color.a + contrib);
           }
-          t += dist;
+          t += step;
         }
 
-        if (hit) {
-          color = abs(raydir);
-        }
+        color = vec4f(mix(bgColor, color.rgb, color.a), 1);
 
-        return vec4f(color, 1);
+        return color;
       }
     `,
   })

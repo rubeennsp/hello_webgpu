@@ -36,3 +36,17 @@
 h1 {
     font-size: 500%;
 }
+
+#file-input::file-selector-button {
+  background-color: lightyellow;
+  color: maroon;             /* White text */
+  z-index: 10;
+  cursor: pointer;
+  bottom: 5vmin;
+  left: 5vmin;
+  padding: 0.6em;
+  position: fixed;
+  /* font-family: 'Courier New', Courier, monospace; */
+  font-size: clamp(1vmin, 2rem, 3vmin);
+  border-radius: 1em;
+}

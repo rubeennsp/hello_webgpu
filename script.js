@@ -98,6 +98,58 @@ async function main() {
   const { device, context } = await initWebGPU(canvas);
   console.log(device, context);
 
+
+  // File input
+
+  let upload = null
+  const fileInputElement = document.querySelector("#file-input")
+  fileInputElement.addEventListener("change", handleFileInput)
+  fileInputElement.addEventListener("click", function() { this.value = null })
+
+  /** @param {File} file */
+  async function handleImageFile(file) {
+    const bitmap = await createImageBitmap(file)
+    console.log({ bitmap })
+    const texture = device.createTexture({
+      size: [bitmap.width, bitmap.height, 1],
+      format: "rgba32float",
+      usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.COPY_DST
+        | GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.RENDER_ATTACHMENT,
+      label: "uploaded-image",
+    })
+    device.queue.copyExternalImageToTexture({source: bitmap}, {texture}, [bitmap.width, bitmap.height, 1])
+    upload = {
+      type: "image",
+      texture,
+    }
+  }
+
+  /** @param {File} file */
+  async function handleTextFile(file) {
+    const reader = new FileReader()
+    reader.readAsText(file)
+    reader.addEventListener("load", function() {
+      upload = {
+        type: "text",
+        text: reader.result,
+      }
+    })
+  }
+
+  function handleFileInput() {
+    console.log("File Upload!")
+    /** @type {File} */
+    const file = this.files[0];
+    if (file.type.startsWith("image/")) {
+      handleImageFile(file)
+    } else if (file.type.startsWith("text/")) {
+      handleTextFile(file)
+    } else {
+      alert(`Error: cannot handle file of type ${file.type}`)
+      console.log(file)
+    }
+  }
+
   window.addEventListener("resize", () => resizeGPUCanvas(canvas, device))
   resizeGPUCanvas(canvas, device)
 
@@ -324,8 +376,13 @@ async function main() {
 
   const timeStart = performance.now() / 1000.
   let time = 0;
+  let prevUpload = upload;
 
   function update() {
+    if (prevUpload != upload) {
+      console.log(upload)
+      prevUpload = upload
+    }
     const now = performance.now() / 1000. // time in seconds
     time = now - timeStart;
   }

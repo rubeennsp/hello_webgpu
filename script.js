@@ -147,6 +147,7 @@ async function main() {
     } else {
       alert(`Error: cannot handle file of type ${file.type}`)
       console.log(file)
+      this.value = null
     }
   }
 
@@ -380,7 +381,7 @@ async function main() {
 
   function update() {
     if (prevUpload != upload) {
-      console.log(upload)
+      console.log({upload})
       prevUpload = upload
     }
     const now = performance.now() / 1000. // time in seconds

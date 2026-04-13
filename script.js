@@ -363,21 +363,31 @@ async function main() {
         // Loop variables
         var t: f32 = distance(eye, worldPos) - random(fragCoord.xyz) * 0.1;
         var hit: bool = false;
-        var step: f32 = 0.05;
+        let minstep: f32 = 0.01;
+        var density: f32; // density for the next iteration
+        let insideDensity = 3.;
 
         for (var i: u32 = 0; i < numIter; i++) {
+          if (color.a > 0.99) {
+            break; // Less than 0.1% contribution remains
+          }
           let pos = eye + raydir * t;
           let dist = sdScene(pos);
+          let step = max(minstep, abs(dist));
           if (dist < 0) {
             hit = true;
-            let density: f32 = .1;
-            let contrib: f32 = (1 - color.a) * density;
-            color = vec4f(color.rgb + contrib * vec3f(1, 1, 1), color.a + contrib);
+            density = insideDensity;
+            let integratedDensity = 1. - exp(- step * density);
+            let contrib: f32 = (1 - color.a) * integratedDensity;
+            let radiance = vec3f(1, 1, 1);
+            color = vec4f(color.rgb + contrib * radiance, color.a + contrib);
+          } else {
+            density = 0.;
           }
           t += step;
         }
 
-        color = vec4f(mix(bgColor, color.rgb, color.a), 1);
+        color = vec4f(color.rgb + (1 - color.a) * bgColor, 1);
 
         return color;
       }
